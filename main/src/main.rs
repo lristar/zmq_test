@@ -1,4 +1,6 @@
+use zmq_Server;
+use zmq_Client;
 
 fn main() {
-    println!("Hello, world!");
+    zmq_Client::NewClient();
 }
