@@ -1,0 +1,8 @@
+[package]
+name = "zmq_Client"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+zmq = "0.9"

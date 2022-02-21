@@ -1,0 +1,7 @@
+[workspace]
+
+members = [
+ "zmq_Client",
+  "zmq_Server",
+ "main",
+]
