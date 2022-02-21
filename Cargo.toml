@@ -2,6 +2,6 @@
 
 members = [
  "zmq_Client",
-  "zmq_Server",
+ "zmq_Server",
  "main",
 ]

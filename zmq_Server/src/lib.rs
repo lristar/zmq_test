@@ -5,7 +5,7 @@ pub fn NewServer() {
     let context = zmq::Context::new();
     let responder = context.socket(zmq::REP).unwrap();
 
-    assert!(responder.bind("tcp://127.0.0.1:5555").is_ok());
+    assert!(responder.bind("tcp://*:5555").is_ok());
 
     let mut msg = zmq::Message::new();
     loop {
