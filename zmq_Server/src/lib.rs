@@ -1,5 +1,9 @@
+pub mod publisher;
+pub mod mt;
+
 use std::thread;
 use std::time::Duration;
+use zmq;
 
 pub fn NewServer() {
     let context = zmq::Context::new();
@@ -15,3 +19,4 @@ pub fn NewServer() {
         responder.send("World", 0).unwrap();
     }
 }
+
