@@ -12,6 +12,10 @@ pub fn new_subscriber_path(topic: i32) {
     } else {
         "tcp://localhost:5556"
     };
+    if let Err(e) = subscriber.set_reconnect_ivl_max(10) {
+        eprintln!("e = {:?}", e);
+    }
+
     subscriber
         .connect(&address)
         .expect("could not connect to publisher");
@@ -22,6 +26,13 @@ pub fn new_subscriber_path(topic: i32) {
     // let topic_range = Uniform::new(15, 16);
     let subscription = format!("{:03}", topic).into_bytes();
     subscriber.set_subscribe(&subscription).unwrap();
+    let event =  subscriber.get_events();
+    match event {
+        Ok(v) => {
+        eprintln!("event = {:?}", v);
+        },
+        Err(e) => {eprintln!("e = {:?}", e);},
+    }
 
     loop {
         let topic = subscriber.recv_msg(0).unwrap();

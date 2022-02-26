@@ -1,7 +1,6 @@
-pub mod subscriber;
 pub mod mtclient;
-
-
+pub mod pullClient;
+pub mod subscriber;
 
 pub fn NewClient() {
     println!("Connecting to hello world server...\n");

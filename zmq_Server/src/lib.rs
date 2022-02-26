@@ -1,6 +1,6 @@
 pub mod publisher;
 pub mod mt;
-
+pub mod pusher;
 use std::thread;
 use std::time::Duration;
 use zmq;
