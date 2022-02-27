@@ -2,25 +2,29 @@
 fn main() {
     let context = zmq::Context::new();
 
-    // socket to receive messages on
+    // Connect to task ventilator
     let receiver = context.socket(zmq::PULL).unwrap();
     assert!(receiver.connect("tcp://localhost:5557").is_ok());
 
-    //  Socket to send messages to
-    let sender = context.socket(zmq::PUSH).unwrap();
-    assert!(sender.connect("tcp://localhost:5558").is_ok());
+    // Connect to weather server
+    let subscriber = context.socket(zmq::SUB).unwrap();
+    assert!(subscriber.connect("tcp://localhost:5556").is_ok());
+    let filter = b"10001";
+    assert!(subscriber.set_subscribe(filter).is_ok());
 
+    // Process messages from both sockets
+    let mut msg = zmq::Message::new();
     loop {
-        let string = receiver.recv_string(0).unwrap().unwrap();
-
-        // Show progress
-        print!(".");
-        let _ = io::stdout().flush();
-
-        // Do the work
-        thread::sleep(Duration::from_millis(atoi(&string)));
-
-        // Send results to sink
-        sender.send("", 0).unwrap();
+        let mut items = [
+            receiver.as_poll_item(zmq::POLLIN),
+            subscriber.as_poll_item(zmq::POLLIN),
+        ];
+        zmq::poll(&mut items, -1).unwrap();
+        if items[0].is_readable() && receiver.recv(&mut msg, 0).is_ok() {
+            //  Process task
+        }
+        if items[1].is_readable() && subscriber.recv(&mut msg, 0).is_ok() {
+            // Process weather update
+        }
     }
 }

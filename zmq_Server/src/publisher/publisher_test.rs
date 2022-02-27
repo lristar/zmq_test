@@ -6,6 +6,8 @@ use std::thread::sleep;
 use std::time::Duration;
 use zmq;
 
+use crate::publisher::publisher::IZmqEngine;
+
 use super::publisher::{IPubServer, ZmqEngine};
 
 pub fn new_publisher_path() {
@@ -86,8 +88,7 @@ pub fn new_publisher_psenv() {
 }
 
 pub fn test_Publisher() {
-    eprintln!("start");
-    let  zmq = ZmqEngine::new("tcp://*:4102", 10, 10).unwrap();
+    let  zmq = ZmqEngine::new("tcp://*:4102","tcp://:4103", 10, 10).unwrap();
     eprintln!(" init success",);
     let mq = Arc::new(zmq);
     let mq1 = Arc::clone(&mq);
@@ -96,10 +97,14 @@ pub fn test_Publisher() {
         // pub_thread.send("ping", 0).expect("ping success");
         sleep(Duration::from_millis(25000));
     });
-    loop {
-      sleep(Duration::from_millis(50000));
-      mq.Pub(&"We would like to see this", "hi").unwrap();
-      mq.Pub(&"We would like to see this", "halo").unwrap();
-    }
+    let s = thread::spawn(move || {
+      loop {
+        sleep(Duration::from_millis(50000));
+        mq.pubish(&"We would like to see this", "hi").unwrap();
+        mq.pubish(&"We would like to see this", "halo").unwrap();
+      }
+    });
+    
+    s.join().unwrap();
     ping.join().unwrap();
 }

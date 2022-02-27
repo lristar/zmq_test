@@ -12,8 +12,13 @@ path = "src/client.rs"
 name = "server"
 path = "src/server.rs"
 
+[[bin]] 
+name = "main"
+path = "src/main.rs"
+
 
 
 [dependencies]
 zmq_Client = {path = "../zmq_Client"}
 zmq_Server = {path = "../zmq_Server"}
+zmq = "0.9"

@@ -50,6 +50,7 @@ dependencies = [
 name = "main"
 version = "0.1.0"
 dependencies = [
+ "zmq",
  "zmq_Client",
  "zmq_Server",
 ]
