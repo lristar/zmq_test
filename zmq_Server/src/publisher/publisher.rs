@@ -1,88 +1,60 @@
 use rand::distributions::{Distribution, Uniform};
 use std::env;
+use std::io::Error;
+use std::result;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
 use zmq;
 
-pub fn new_publisher_path() {
-    let context = zmq::Context::new();
-    let publisher = context.socket(zmq::PUB).unwrap();
-    let args: Vec<_> = env::args().collect();
-    let address = if args.len() == 2 {
-        args[1].as_str()
-    } else {
-        "tcp://*:4102"
-    };
-    publisher
-        .bind(&address)
-        .expect("could not bind publisher socket");
-    if let Err(e)=publisher.set_connect_timeout(10){
-        eprintln!("e = {:?}", e);
-        return;
-    }
-    if let Err(e) = publisher.set_heartbeat_timeout(10){
-        eprintln!("e = {:?}", e);
-        return;
-    }
-    // Ensure subscriber connection has time to complete
-    sleep(Duration::from_millis(1000));
+pub trait IPubServer {
+    fn Pub(&self, data: &str, topic: &str) -> result::Result<(), zmq::Error>;
+    fn Poll(&self);
+    fn check_ping(&self) -> result::Result<(), zmq::Error>;
+}
 
-    // Send out all 1,000 topic messages
-    // for topic_nbr in 0..1000 {
-    // let mut rng = rand::thread_rng();
-    // let topic_range = Uniform::new_inclusive(start, end);
-    // publisher
-    //     .send(&format!("{:03}",15), zmq::SNDMORE)
-    //     .unwrap();
-    // publisher.send("Save Roger", 0).unwrap();
-    // publisher
-    //     .send(&format!("{:03}",16), zmq::SNDMORE)
-    //     .unwrap();
-    // publisher.send("Save Roger", 0).unwrap();
-    // }
-    // Send one random update per second
-    eprintln!("send ");
-    // let topic_range = Uniform::new(start, end);
-    // let _pub = publisher;
-    // let ping = thread::spawn(move || {
-    //     loop {
-    //         if let Err(e) = _pub.send("ping", 0) {
-    //             break;
-    //         }
-    //         sleep(Duration::from_millis(3000));
-    //     }
-    // });
+pub struct ZmqEngine {
+    context: zmq::Context,
+    // pub_socket: zmq::Socket,
+    pub_socket: Mutex<zmq::Socket>,
+}
 
-    // ping.join().unwrap();
-    loop {
-       let num = publisher.get_heartbeat_timeout();
-       match num {
-           Ok(v) => {eprintln!("v = {:?}", v);},
-           Err(e) => {eprintln!("e = {:?}", e);},
-       }
-        sleep(Duration::from_millis(1000));
-        // let a = "hi";
-        // let b = "halo";
-        // publisher.send(&a, zmq::SNDMORE).unwrap();
-        // publisher.send("Off with his head!", 0).unwrap();
-        // sleep(Duration::from_millis(1000));
-        // publisher.send(&b, zmq::SNDMORE).unwrap();
-        // publisher.send("Off with his head!", 0).unwrap();
+impl ZmqEngine {
+    pub fn new(
+        pub_address: &str,
+        connect_timeout: i32,
+        heartbeat_timeout: i32,
+    ) -> result::Result<ZmqEngine, zmq::Error> {
+        let ctx = zmq::Context::new();
+        let pst = ctx.socket(zmq::PUB)?;
+        pst.set_connect_timeout(connect_timeout)?;
+        pst.set_heartbeat_timeout(heartbeat_timeout)?;
+        pst.bind(pub_address)?;
+        Ok(ZmqEngine {
+            context: ctx,
+            pub_socket: Mutex::new(pst),
+        })
     }
 }
 
-pub fn new_publisher_psenv() {
-    let context = zmq::Context::new();
-    let publisher = context.socket(zmq::PUB).unwrap();
-    publisher
-        .bind("tcp://*:4102")
-        .expect("failed binding publisher");
 
-    loop {
-        sleep(Duration::from_millis(1000));
-        publisher.send("We don't want to see this", 0).unwrap();
-        publisher.send("We would like to see this", 0).unwrap();
-        thread::sleep(Duration::from_millis(1));
+impl IPubServer for ZmqEngine {
+    fn Pub(&self, data: &str, topic: &str) -> result::Result<(), zmq::Error> {
+        let m = match self.pub_socket.lock() {
+            Ok(m) => m,
+            Err(e) => return Err(zmq::Error::EACCES),
+        };
+        // 定位topic
+        m.send(topic, zmq::SNDMORE)?;
+        Ok(m.send(data, 0)?)
+    }
+
+    fn Poll(&self) {
+        todo!()
+    }
+
+    fn check_ping(&self) -> result::Result<(), zmq::Error> {
+        Ok(self.Pub("ping", "ping")?)
     }
 }
