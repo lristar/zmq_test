@@ -14,16 +14,15 @@ pub trait IZmqEngine {
     fn join(&self) -> Option<thread::JoinHandle<()>>;
     fn pubish(&self, data: &str, topic: &str) -> result::Result<(), zmq::Error>;
     fn poll(&self);
-    fn resp(&self) -> result::Result<(), zmq::Error>;
+    fn resp(&self) -> result::Result<String, zmq::Error>;
     fn check_ping(&self) -> result::Result<(), zmq::Error>;
-    fn check_connect(&mut self);
+    fn check_connect(&self);
 }
 
 pub struct ZmqEngine {
     context: zmq::Context,
     pub_socket: Arc<Mutex<zmq::Socket>>,
     rep_socket: Arc<Mutex<zmq::Socket>>,
-    pub threads: Option<thread::JoinHandle<()>>,
     is_active: bool,
 }
 
@@ -47,7 +46,6 @@ impl ZmqEngine {
             context: ctx,
             pub_socket: Arc::new(Mutex::new(pst)),
             rep_socket: Arc::new(Mutex::new(rpst)),
-            threads: None,
             is_active: false,
         })
     }
@@ -77,23 +75,25 @@ impl IZmqEngine for ZmqEngine {
         Ok(m.send(data, 0)?)
     }
 
-    fn resp(&self) -> result::Result<(), zmq::Error> {
+    fn resp(&self) -> result::Result<String, zmq::Error> {
         let rp = match self.rep_socket.lock() {
             Ok(m) => m,
             Err(_) => return Err(zmq::Error::EACCES),
         };
         let mut msg = zmq::Message::new();
         rp.recv(&mut msg, 0)?;
-        rp.send(&msg.as_str().unwrap(), 0)?;
-        Ok(())
+        let m = msg.as_str().unwrap();
+        rp.send(m, 0)?;
+        Ok(m.to_string())
     }
 
     fn poll(&self) {
         todo!()
     }
 
-    fn check_connect(&mut self) {
+    fn check_connect(&self) {
         let ac = Arc::clone(&self.rep_socket);
+        let pb = Arc::clone(&self.pub_socket);
         let handler = thread::spawn(move || {
             let rp = match ac.try_lock() {
                 Ok(m) => m,
@@ -119,9 +119,18 @@ impl IZmqEngine for ZmqEngine {
                         eprintln!("check_connect send is error = {:?}", e);
                     }
                 }
+                println!("start trylock");
+                // match pb.try_lock() {
+                    
+                //     Ok(p) => {
+                //         p.send("ping", zmq::SNDMORE).unwrap_or_else(|err| {eprintln!("ping send err is = {:?}",err );});
+                //         p.send(result, 0).unwrap_or_else(|err| {eprintln!("ping send err is = {:?}",err );});
+                //     }
+                //     Err(e) => eprintln!(" = "),
+                // }
             }
         });
-        self.threads = Some(handler);
+        
     }
 
     fn check_ping(&self) -> result::Result<(), zmq::Error> {

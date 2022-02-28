@@ -86,7 +86,7 @@ pub fn new_publisher_psenv() {
 }
 
 pub fn test_Publisher() {
-    let mut zmq = ZmqEngine::new("tcp://*:4102", "tcp://*:4103", 10, 10).unwrap();
+    let mut zmq = ZmqEngine::new("tcp://*:4102", "tcp://*:2222", 10, 10).unwrap();
     eprintln!(" init success",);
     // let ping = thread::spawn(move || loop {
     //     mq1.check_ping().unwrap();
@@ -96,14 +96,20 @@ pub fn test_Publisher() {
     zmq.start();
     let mq = Arc::new(zmq);
     let mq1 = Arc::clone(&mq);
+
     let s = thread::spawn(move || loop {
         sleep(Duration::from_millis(50000));
         mq1.pubish(&"We would like to see this", "hi").unwrap();
         mq1.pubish(&"We would like to see this", "halo").unwrap();
     });
 
-   if let Some(handler) = &mq.threads {
-        handler.join().unwrap();
-   }
+    //    if let Some(handler) = &mq.threads {
+    //         handler.join().unwrap();
+    //    }
+    let p = thread::spawn(move || loop {
+        let m = mq.resp().unwrap();
+        mq.pubish(m.as_str(), "ping").unwrap();
+    });
+    p.join().unwrap();
     s.join().unwrap();
 }
