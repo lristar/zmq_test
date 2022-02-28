@@ -9,28 +9,22 @@ use std::time::Duration;
 use zmq;
 
 pub trait IZmqEngine {
-    fn prepare(
-        &mut self,
-        pub_address: &str,
-        resp_address: &str,
-        connect_timeout: i32,
-        heartbeat_timeout: i32,
-    );
-    fn start(&self);
+    fn start(&mut self);
     fn run(&self);
-    fn stop(&self);
+    fn join(&self) -> Option<thread::JoinHandle<()>>;
     fn pubish(&self, data: &str, topic: &str) -> result::Result<(), zmq::Error>;
     fn poll(&self);
-    fn resp(&self);
+    fn resp(&self) -> result::Result<(), zmq::Error>;
     fn check_ping(&self) -> result::Result<(), zmq::Error>;
-    fn check_connect(&self);
+    fn check_connect(&mut self);
 }
 
 pub struct ZmqEngine {
     context: zmq::Context,
-    pub_socket: Mutex<zmq::Socket>,
-    rep_socket: Mutex<zmq::Socket>,
-    threads: Vec<thread::JoinHandle<()>>,
+    pub_socket: Arc<Mutex<zmq::Socket>>,
+    rep_socket: Arc<Mutex<zmq::Socket>>,
+    pub threads: Option<thread::JoinHandle<()>>,
+    is_active: bool,
 }
 
 impl ZmqEngine {
@@ -51,44 +45,28 @@ impl ZmqEngine {
         rpst.bind(resp_address)?;
         Ok(ZmqEngine {
             context: ctx,
-            pub_socket: Mutex::new(pst),
-            rep_socket: Mutex::new(rpst),
-            threads: vec![],
+            pub_socket: Arc::new(Mutex::new(pst)),
+            rep_socket: Arc::new(Mutex::new(rpst)),
+            threads: None,
+            is_active: false,
         })
     }
 }
 
 impl IZmqEngine for ZmqEngine {
-    fn prepare(
-        &mut self,
-        pub_address: &str,
-        resp_address: &str,
-        connect_timeout: i32,
-        heartbeat_timeout: i32,
-    ) {
-        let pb = self.pub_socket.try_lock().unwrap();
-        let rp = self.rep_socket.try_lock().unwrap();
-        pb.set_connect_timeout(connect_timeout).unwrap();
-        pb.set_heartbeat_timeout(heartbeat_timeout).unwrap();
-        pb.bind(pub_address).unwrap();
-        rp.set_connect_timeout(connect_timeout).unwrap();
-        rp.set_heartbeat_timeout(heartbeat_timeout).unwrap();
-        rp.bind(resp_address).unwrap();
-    }
-
-    fn start(&self) {
+    fn start(&mut self) {
         // check server which can use
-        
+        self.is_active = true
     }
 
     fn run(&self) {
         todo!()
     }
 
-    fn stop(&self) {
+    // 启动线程，放在程序最后面
+    fn join(&self) -> Option<thread::JoinHandle<()>> {
         todo!()
     }
-
     fn pubish(&self, data: &str, topic: &str) -> result::Result<(), zmq::Error> {
         let m = match self.pub_socket.lock() {
             Ok(m) => m,
@@ -99,16 +77,51 @@ impl IZmqEngine for ZmqEngine {
         Ok(m.send(data, 0)?)
     }
 
-    fn resp(&self) {
-        todo!()
+    fn resp(&self) -> result::Result<(), zmq::Error> {
+        let rp = match self.rep_socket.lock() {
+            Ok(m) => m,
+            Err(_) => return Err(zmq::Error::EACCES),
+        };
+        let mut msg = zmq::Message::new();
+        rp.recv(&mut msg, 0)?;
+        rp.send(&msg.as_str().unwrap(), 0)?;
+        Ok(())
     }
 
     fn poll(&self) {
         todo!()
     }
 
-    fn check_connect(&self) {
-        todo!()
+    fn check_connect(&mut self) {
+        let ac = Arc::clone(&self.rep_socket);
+        let handler = thread::spawn(move || {
+            let rp = match ac.try_lock() {
+                Ok(m) => m,
+                Err(e) => panic!("check connect gei lock failed"),
+            };
+            let mut msg = zmq::Message::new();
+            loop {
+                match rp.recv(&mut msg, 0) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        eprintln!("check_connect recv is error = {:?}", e);
+                    }
+                }
+                let result = &match msg.as_str() {
+                    Some(e) => e,
+                    None => {
+                        continue;
+                    }
+                };
+                match rp.send(result, 0) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        eprintln!("check_connect send is error = {:?}", e);
+                    }
+                }
+            }
+        });
+        self.threads = Some(handler);
     }
 
     fn check_ping(&self) -> result::Result<(), zmq::Error> {

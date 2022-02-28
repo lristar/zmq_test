@@ -6,9 +6,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use zmq;
 
-use crate::publisher::publisher::IZmqEngine;
-
-use super::publisher::{IPubServer, ZmqEngine};
+use crate::publisher::publisher::{IZmqEngine, ZmqEngine};
 
 pub fn new_publisher_path() {
     let context = zmq::Context::new();
@@ -88,23 +86,24 @@ pub fn new_publisher_psenv() {
 }
 
 pub fn test_Publisher() {
-    let  zmq = ZmqEngine::new("tcp://*:4102","tcp://:4103", 10, 10).unwrap();
+    let mut zmq = ZmqEngine::new("tcp://*:4102", "tcp://*:4103", 10, 10).unwrap();
     eprintln!(" init success",);
+    // let ping = thread::spawn(move || loop {
+    //     mq1.check_ping().unwrap();
+    //     // pub_thread.send("ping", 0).expect("ping success");
+    //     sleep(Duration::from_millis(25000));
+    // });
+    zmq.start();
     let mq = Arc::new(zmq);
     let mq1 = Arc::clone(&mq);
-    let ping = thread::spawn(move || loop {
-        mq1.check_ping().unwrap();
-        // pub_thread.send("ping", 0).expect("ping success");
-        sleep(Duration::from_millis(25000));
-    });
-    let s = thread::spawn(move || {
-      loop {
+    let s = thread::spawn(move || loop {
         sleep(Duration::from_millis(50000));
-        mq.pubish(&"We would like to see this", "hi").unwrap();
-        mq.pubish(&"We would like to see this", "halo").unwrap();
-      }
+        mq1.pubish(&"We would like to see this", "hi").unwrap();
+        mq1.pubish(&"We would like to see this", "halo").unwrap();
     });
-    
+
+   if let Some(handler) = &mq.threads {
+        handler.join().unwrap();
+   }
     s.join().unwrap();
-    ping.join().unwrap();
 }
