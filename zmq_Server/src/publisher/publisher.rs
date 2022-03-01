@@ -100,7 +100,7 @@ impl IZmqEngine for ZmqEngine {
             return Err(ErrorType::ZmqError("zmq publish data failed".to_string()));
         }
         let result = self.resp()?;
-        if result == msg.time_sec {
+        if result == msg.time_sec.to_string() {
             return Ok(());
         }
         return Err(ErrorType::IoError("sync server failed".to_string()));
