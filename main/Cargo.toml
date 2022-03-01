@@ -22,3 +22,6 @@ path = "src/main.rs"
 zmq_Client = {path = "../zmq_Client"}
 zmq_Server = {path = "../zmq_Server"}
 zmq = "0.9"
+time = "0.1.41"
+serde_json = "1.0.79"
+serde = "1.0.136"

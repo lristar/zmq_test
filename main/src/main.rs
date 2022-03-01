@@ -1,30 +1,24 @@
 
+use serde::{Serialize, Deserialize};
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Point {
+    x: i32,
+    y: i32,
+}
+
 fn main() {
-    let context = zmq::Context::new();
+    let point = Point { x: 1, y: 2 };
 
-    // Connect to task ventilator
-    let receiver = context.socket(zmq::PULL).unwrap();
-    assert!(receiver.connect("tcp://localhost:5557").is_ok());
+    // Convert the Point to a JSON string.
+    let serialized = serde_json::to_string(&point).unwrap();
 
-    // Connect to weather server
-    let subscriber = context.socket(zmq::SUB).unwrap();
-    assert!(subscriber.connect("tcp://localhost:5556").is_ok());
-    let filter = b"10001";
-    assert!(subscriber.set_subscribe(filter).is_ok());
+    // Prints serialized = {"x":1,"y":2}
+    println!("serialized = {}", serialized);
 
-    // Process messages from both sockets
-    let mut msg = zmq::Message::new();
-    loop {
-        let mut items = [
-            receiver.as_poll_item(zmq::POLLIN),
-            subscriber.as_poll_item(zmq::POLLIN),
-        ];
-        zmq::poll(&mut items, -1).unwrap();
-        if items[0].is_readable() && receiver.recv(&mut msg, 0).is_ok() {
-            //  Process task
-        }
-        if items[1].is_readable() && subscriber.recv(&mut msg, 0).is_ok() {
-            // Process weather update
-        }
-    }
+    // Convert the JSON string back to a Point.
+    let deserialized: Point = serde_json::from_str(&serialized).unwrap();
+
+    // Prints deserialized = Point { x: 1, y: 2 }
+    println!("deserialized = {:?}", deserialized);
 }

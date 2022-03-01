@@ -4,8 +4,9 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
-use zmq;
+use time;
 
+use crate::publisher::models::Message;
 use crate::publisher::publisher::{IZmqEngine, ZmqEngine};
 
 pub fn new_publisher_path() {
@@ -94,22 +95,24 @@ pub fn test_Publisher() {
     //     sleep(Duration::from_millis(25000));
     // });
     zmq.start();
-    let mq = Arc::new(zmq);
-    let mq1 = Arc::clone(&mq);
 
     let s = thread::spawn(move || loop {
-        sleep(Duration::from_millis(50000));
-        mq1.pubish(&"We would like to see this", "hi").unwrap();
-        mq1.pubish(&"We would like to see this", "halo").unwrap();
+        sleep(Duration::from_millis(10000));
+        let m1 = Message {
+            topic: "hi".to_string(),
+            content: "We would like to see this".to_string(),
+            time_sec: time::get_time().sec.to_string(),
+        };
+        zmq.pubish(m1).unwrap();
     });
 
     //    if let Some(handler) = &mq.threads {
     //         handler.join().unwrap();
     //    }
-    let p = thread::spawn(move || loop {
-        let m = mq.resp().unwrap();
-        mq.pubish(m.as_str(), "ping").unwrap();
-    });
-    p.join().unwrap();
+    // let p = thread::spawn(move || loop {
+    //     let m = mq.resp().unwrap();
+    //     mq.pubish(m.as_str(), "ping").unwrap();
+    // });
+    // p.join().unwrap();
     s.join().unwrap();
 }

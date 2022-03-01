@@ -1,21 +1,35 @@
 use rand::distributions::{Distribution, Uniform};
-use std::env;
+use serde_json::Result;
+use std::fmt::{self, write};
 use std::io::Error;
 use std::result;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::sleep;
-use std::time::Duration;
+use std::{env, error, io};
 use zmq;
 
+use super::models;
+
+#[derive(Debug)]
+pub enum ErrorType {
+    ZmqError(String),
+    IoError(String),
+    JsonError(String),
+}
+
+// impl fmt::Display for ErrorType{
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         write(output, args)
+// `     }
+// }
 pub trait IZmqEngine {
     fn start(&mut self);
     fn run(&self);
     fn join(&self) -> Option<thread::JoinHandle<()>>;
-    fn pubish(&self, data: &str, topic: &str) -> result::Result<(), zmq::Error>;
+    fn pubish(&self, msg: models::Message) -> result::Result<(), ErrorType>;
     fn poll(&self);
-    fn resp(&self) -> result::Result<String, zmq::Error>;
-    fn check_ping(&self) -> result::Result<(), zmq::Error>;
+    fn resp(&self) -> result::Result<String, ErrorType>;
     fn check_connect(&self);
 }
 
@@ -65,25 +79,50 @@ impl IZmqEngine for ZmqEngine {
     fn join(&self) -> Option<thread::JoinHandle<()>> {
         todo!()
     }
-    fn pubish(&self, data: &str, topic: &str) -> result::Result<(), zmq::Error> {
+    fn pubish(&self, msg: models::Message) -> result::Result<(), ErrorType> {
         let m = match self.pub_socket.lock() {
             Ok(m) => m,
-            Err(_e) => return Err(zmq::Error::EACCES),
+            Err(_e) => {
+                return Err(ErrorType::IoError(
+                    "zmq publish get lock failed".to_string(),
+                ))
+            }
+        };
+        let msg_json = match serde_json::to_string(&msg) {
+            Ok(v) => v,
+            Err(e) => return Err(ErrorType::JsonError("json exchange false".to_string())),
         };
         // 定位topic
-        m.send(topic, zmq::SNDMORE)?;
-        Ok(m.send(data, 0)?)
+        if let Err(e) = m.send(msg.topic.as_str(), zmq::SNDMORE) {
+            return Err(ErrorType::ZmqError("zmq publish topic failed".to_string()));
+        }
+        if let Err(e) = m.send(msg_json.as_str(), 0) {
+            return Err(ErrorType::ZmqError("zmq publish data failed".to_string()));
+        }
+        let result = self.resp()?;
+        if result == msg.time_sec {
+            return Ok(());
+        }
+        return Err(ErrorType::IoError("sync server failed".to_string()));
     }
 
-    fn resp(&self) -> result::Result<String, zmq::Error> {
+    fn resp(&self) -> result::Result<String, ErrorType> {
         let rp = match self.rep_socket.lock() {
             Ok(m) => m,
-            Err(_) => return Err(zmq::Error::EACCES),
+            Err(_) => {
+                return Err(ErrorType::IoError(
+                    "zmq publish get lock failed".to_string(),
+                ))
+            }
         };
         let mut msg = zmq::Message::new();
-        rp.recv(&mut msg, 0)?;
+        if let Err(e) = rp.recv(&mut msg, 0) {
+            return Err(ErrorType::ZmqError("zmq recv failed".to_string()));
+        }
         let m = msg.as_str().unwrap();
-        rp.send(m, 0)?;
+        if let Err(e) = rp.send(m, 0) {
+            return Err(ErrorType::ZmqError("zmq resp send failed".to_string()));
+        }
         Ok(m.to_string())
     }
 
@@ -121,7 +160,7 @@ impl IZmqEngine for ZmqEngine {
                 }
                 println!("start trylock");
                 // match pb.try_lock() {
-                    
+
                 //     Ok(p) => {
                 //         p.send("ping", zmq::SNDMORE).unwrap_or_else(|err| {eprintln!("ping send err is = {:?}",err );});
                 //         p.send(result, 0).unwrap_or_else(|err| {eprintln!("ping send err is = {:?}",err );});
@@ -130,10 +169,9 @@ impl IZmqEngine for ZmqEngine {
                 // }
             }
         });
-        
     }
 
-    fn check_ping(&self) -> result::Result<(), zmq::Error> {
-        Ok(self.pubish("ping", "ping")?)
-    }
+    // fn check_ping(&self) -> result::Result<(), ErrorType> {
+    //     Ok(self.pubish("ping", "ping")?)
+    // }
 }
